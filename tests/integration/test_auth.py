@@ -164,7 +164,7 @@ class TestAuditTrail:
 
         card = await create_card(alice, driver["id"])
         await bob.patch(f"/cards/{card['id']}/status", json={"status": "blocked", "comment": "test"})
-        await alice.patch(f"/cards/{card['id']}/status", json={"status": "active"})
+        await alice.patch(f"/cards/{card['id']}/status", json={"status": "active", "comment": "ok"})
 
         history = (await manager.get(f"/cards/{card['id']}/history")).json()
         assert [(h["new_status"], h["changed_by"]) for h in history] == [

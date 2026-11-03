@@ -471,7 +471,7 @@ The brief leaves some things open. These are the choices made, and why.
 | Question | Decision | Why |
 |---|---|---|
 | Reject or flag a risky purchase? | Decline only on card status and truck problems; **flag** everything else | A driver should not be stranded at the pump by a limit rule, but a manager must still see it. Both "validate" and "keep for review" are honored. |
-| Can a blocked card be unblocked? | Yes, any status can change to any other | A block can be lifted when a fraud report is withdrawn. Every change is logged. |
+| Can a blocked card be unblocked? | Yes, but only back to `active`, with a comment | A block can be lifted when a fraud report is withdrawn. A blocked card cannot be set to `inactive` (that would let a block be dodged: blocked, inactive, active). Every change is logged with its comment. |
 | Which limits? | Per transaction, daily, weekly, monthly, all optional | Covers one big purchase and slow overspending. |
 | Calendar days or rolling windows? | Rolling (24 h / 7 d / 30 d) | No loophole at midnight. |
 | How is the truck chosen? | From the driver's current assignment; an optional `truck_id` must match it | Prevents using a card on the wrong vehicle. A manager reassigns to allow a change. |

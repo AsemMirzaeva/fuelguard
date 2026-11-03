@@ -55,10 +55,15 @@ async def change_status(
     card = await get_or_404(db, FuelCard, card_id, "Card", lock=True)
     if card.status == new_status:
         raise ConflictError(f"Card is already {new_status.value}")
+    if card.status == CardStatus.BLOCKED and new_status == CardStatus.INACTIVE:
+        # Otherwise a block could be dodged: blocked -> inactive -> active.
+        raise InvalidStateError("A blocked card can only be unblocked, not deactivated")
     if new_status == CardStatus.ACTIVE:
         driver = await get_or_404(db, Driver, card.driver_id, "Driver")
         if not driver.is_active:
             raise InvalidStateError("Cannot activate a card of an inactive driver")
+        if card.status == CardStatus.BLOCKED and not comment:
+            raise InvalidStateError("A comment is required to lift a block")
 
     async with commit_or_conflict(db, "Could not change card status"):
         db.add(

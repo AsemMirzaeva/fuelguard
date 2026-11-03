@@ -78,9 +78,9 @@ class TestStatus:
     @pytest.mark.parametrize(
         "path",
         [["inactive"], ["blocked"], ["inactive", "active"], ["blocked", "active"],
-         ["inactive", "blocked", "inactive", "active"]],
+         ["inactive", "blocked", "active"], ["blocked", "active", "inactive", "active"]],
     )  # fmt: skip
-    async def test_every_transition_is_allowed_including_lifting_a_block(self, manager, path):
+    async def test_the_allowed_transitions_including_lifting_a_block(self, manager, path):
         d = await create_driver(manager)
         c = await create_card(manager, d["id"])
         for status in path:
@@ -89,6 +89,37 @@ class TestStatus:
         history = (await manager.get(f"/cards/{c['id']}/history")).json()
         assert [h["new_status"] for h in history] == ["active", *path]
         assert all(h["changed_by"] == MANAGER_USERNAME for h in history)
+
+    async def test_a_blocked_card_cannot_be_deactivated(self, manager):
+        d = await create_driver(manager)
+        c = await create_card(manager, d["id"])
+        await manager.patch(f"/cards/{c['id']}/status", json={"status": "blocked", "comment": "Lost"})
+        r = await manager.patch(f"/cards/{c['id']}/status", json={"status": "inactive", "comment": "dodge"})
+        assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_state"
+        assert "can only be unblocked" in r.json()["error"]["message"]
+        assert (await manager.get(f"/cards/{c['id']}")).json()["status"] == "blocked"
+        assert len((await manager.get(f"/cards/{c['id']}/history")).json()) == 2
+
+    async def test_lifting_a_block_needs_a_comment(self, manager):
+        d = await create_driver(manager)
+        c = await create_card(manager, d["id"])
+        await manager.patch(f"/cards/{c['id']}/status", json={"status": "blocked", "comment": "Lost"})
+        for body in ({"status": "active"}, {"status": "active", "comment": "  "}):
+            r = await manager.patch(f"/cards/{c['id']}/status", json=body)
+            assert r.status_code == 422 and "comment is required to lift a block" in r.json()["error"]["message"]
+        assert (await manager.get(f"/cards/{c['id']}")).json()["status"] == "blocked"
+        r = await manager.patch(f"/cards/{c['id']}/status", json={"status": "active", "comment": "Found it"})
+        assert r.status_code == 200
+
+    async def test_a_driver_deactivation_leaves_blocked_cards_blocked_and_unblockable_later(self, manager):
+        d = await create_driver(manager)
+        c = await create_card(manager, d["id"])
+        await manager.patch(f"/cards/{c['id']}/status", json={"status": "blocked", "comment": "Lost"})
+        await manager.delete(f"/drivers/{d['id']}")
+        assert (await manager.get(f"/cards/{c['id']}")).json()["status"] == "blocked"
+        await manager.post(f"/drivers/{d['id']}/reactivate")
+        r = await manager.patch(f"/cards/{c['id']}/status", json={"status": "active", "comment": "ok"})
+        assert r.status_code == 200
 
     async def test_deactivating_or_blocking_needs_a_comment(self, manager):
         d = await create_driver(manager)

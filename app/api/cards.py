@@ -57,11 +57,12 @@ async def get_card(card_id: int, db: AsyncSession = Depends(get_db)):
 @router.patch(
     "/{card_id}/status",
     response_model=CardRead,
-    responses={**NOT_FOUND, **CONFLICT},
+    responses={**NOT_FOUND, **CONFLICT, **INVALID_STATE},
     summary="Activate, deactivate or block a card",
     description=(
-        "Any status can change to any other, including lifting a block. "
         "Only active cards can make purchases. Deactivating or blocking needs a `comment` saying why. "
+        "A blocked card can only be activated again (lifting the block, which also needs a `comment`), "
+        "never deactivated, so a block cannot be dodged. "
         "Every change is written to the card's history, with the username of the person who made it "
         "and the comment."
     ),

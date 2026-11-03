@@ -75,7 +75,7 @@ class TestDeclined:
         w = await make_world(manager)
         await manager.patch(f"/cards/{w.card_id}/status", json={"status": "blocked", "comment": "test"})
         assert (await purchase(terminal, w)).json()["authorized"] is False
-        await manager.patch(f"/cards/{w.card_id}/status", json={"status": "active"})
+        await manager.patch(f"/cards/{w.card_id}/status", json={"status": "active", "comment": "Found"})
         assert (await purchase(terminal, w)).json()["authorized"] is True
 
     async def test_driver_without_truck(self, manager, terminal):
