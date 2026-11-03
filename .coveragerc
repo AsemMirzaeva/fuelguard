@@ -1,0 +1,8 @@
+[run]
+source = app
+# SQLAlchemy's async layer runs code in greenlets; without this, that code is reported as untested.
+concurrency = greenlet,thread
+
+[report]
+show_missing = True
+skip_covered = True
