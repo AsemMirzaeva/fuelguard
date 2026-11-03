@@ -45,6 +45,7 @@ class CardStatusHistory(Base):
     old_status: Mapped[CardStatus | None] = mapped_column(db_enum(CardStatus, 20))
     new_status: Mapped[CardStatus] = mapped_column(db_enum(CardStatus, 20))
     changed_by: Mapped[str] = mapped_column(String(50), default="manager")
+    comment: Mapped[str | None] = mapped_column(String(500))
     changed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

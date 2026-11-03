@@ -58,7 +58,7 @@ class TestAccepted:
 class TestDeclined:
     async def test_inactive_card(self, manager, terminal, queued):
         w = await make_world(manager)
-        await manager.patch(f"/cards/{w.card_id}/status", json={"status": "inactive"})
+        await manager.patch(f"/cards/{w.card_id}/status", json={"status": "inactive", "comment": "test"})
         r = await purchase(terminal, w)
         body = r.json()
         assert r.status_code == 201
@@ -68,12 +68,12 @@ class TestDeclined:
 
     async def test_blocked_card(self, manager, terminal):
         w = await make_world(manager)
-        await manager.patch(f"/cards/{w.card_id}/status", json={"status": "blocked"})
+        await manager.patch(f"/cards/{w.card_id}/status", json={"status": "blocked", "comment": "test"})
         assert (await purchase(terminal, w)).json()["decline_reason"] == "card_blocked"
 
     async def test_card_works_again_after_the_block_is_lifted(self, manager, terminal):
         w = await make_world(manager)
-        await manager.patch(f"/cards/{w.card_id}/status", json={"status": "blocked"})
+        await manager.patch(f"/cards/{w.card_id}/status", json={"status": "blocked", "comment": "test"})
         assert (await purchase(terminal, w)).json()["authorized"] is False
         await manager.patch(f"/cards/{w.card_id}/status", json={"status": "active"})
         assert (await purchase(terminal, w)).json()["authorized"] is True
@@ -133,14 +133,14 @@ class TestDeclined:
             await assign(manager, d["id"], truck["id"])
         card = await create_card(manager, d["id"])
         if card_status != "active":
-            await manager.patch(f"/cards/{card['id']}/status", json={"status": card_status})
+            await manager.patch(f"/cards/{card['id']}/status", json={"status": card_status, "comment": "test"})
         other = await create_truck(manager)
         r = await purchase(terminal, card["card_number"], station, truck_id=other["id"] if wrong_truck else None)
         assert r.json()["decline_reason"] == expected
 
     async def test_declined_attempts_are_stored_not_discarded(self, manager, terminal, db):
         w = await make_world(manager)
-        await manager.patch(f"/cards/{w.card_id}/status", json={"status": "blocked"})
+        await manager.patch(f"/cards/{w.card_id}/status", json={"status": "blocked", "comment": "test"})
         for _ in range(3):
             await purchase(terminal, w)
         assert count_transactions(db) == 3
@@ -191,7 +191,7 @@ class TestIdempotency:
 
     async def test_replay_of_a_declined_attempt(self, manager, terminal, queued):
         w = await make_world(manager)
-        await manager.patch(f"/cards/{w.card_id}/status", json={"status": "blocked"})
+        await manager.patch(f"/cards/{w.card_id}/status", json={"status": "blocked", "comment": "test"})
         a = await purchase(terminal, w, key="declined-key-1")
         b = await purchase(terminal, w, key="declined-key-1")
         assert b.status_code == 200 and a.json()["id"] == b.json()["id"] and len(queued) == 1
@@ -199,7 +199,7 @@ class TestIdempotency:
     async def test_replay_returns_the_stored_decision_even_if_the_card_changed(self, manager, terminal):
         w = await make_world(manager)
         first = await purchase(terminal, w, key="stable-key-01")
-        await manager.patch(f"/cards/{w.card_id}/status", json={"status": "blocked"})
+        await manager.patch(f"/cards/{w.card_id}/status", json={"status": "blocked", "comment": "test"})
         again = await purchase(terminal, w, key="stable-key-01")
         assert again.status_code == 200
         assert first.json()["authorized"] is True and again.json()["authorized"] is True
@@ -282,7 +282,7 @@ class TestReadingTransactions:
         a, b = await make_world(manager), await make_world(manager)
         t1 = (await purchase(terminal, a)).json()["id"]
         t2 = (await purchase(terminal, b)).json()["id"]
-        await manager.patch(f"/cards/{b.card_id}/status", json={"status": "blocked"})
+        await manager.patch(f"/cards/{b.card_id}/status", json={"status": "blocked", "comment": "test"})
         t3 = (await purchase(terminal, b)).json()["id"]
 
         def ids(r):

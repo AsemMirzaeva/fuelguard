@@ -61,8 +61,9 @@ async def get_card(card_id: int, db: AsyncSession = Depends(get_db)):
     summary="Activate, deactivate or block a card",
     description=(
         "Any status can change to any other, including lifting a block. "
-        "Only active cards can make purchases. Every change is written to the card's history, "
-        "with the username of the person who made it."
+        "Only active cards can make purchases. Deactivating or blocking needs a `comment` saying why. "
+        "Every change is written to the card's history, with the username of the person who made it "
+        "and the comment."
     ),
 )
 async def change_status(
@@ -71,7 +72,7 @@ async def change_status(
     db: AsyncSession = Depends(get_db),
     user: Principal = Depends(require_manager),
 ):
-    return await card_service.change_status(db, card_id, data.status, user.username)
+    return await card_service.change_status(db, card_id, data.status, user.username, data.comment)
 
 
 @router.patch(

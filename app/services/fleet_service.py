@@ -86,6 +86,15 @@ async def deactivate_driver(db: AsyncSession, driver_id: int) -> None:
     await db.commit()
 
 
+async def reactivate_driver(db: AsyncSession, driver_id: int) -> Driver:
+    """Undo a deactivation. Cards and the truck are not restored: a manager sets those again on purpose."""
+    driver = await get_or_404(db, Driver, driver_id, "Driver", lock=True)
+    if not driver.is_active:
+        driver.is_active = True
+        await db.commit()
+    return driver
+
+
 async def assign_truck(db: AsyncSession, driver_id: int, truck_id: int) -> DriverTruckAssignment:
     driver = await get_or_404(db, Driver, driver_id, "Driver", lock=True)
     truck = await get_or_404(db, Truck, truck_id, "Truck")
@@ -172,3 +181,13 @@ async def deactivate_truck(db: AsyncSession, truck_id: int) -> None:
     for assignment in (await db.execute(stmt)).scalars():
         assignment.unassigned_at = _now()
     await db.commit()
+
+
+async def reactivate_truck(db: AsyncSession, truck_id: int) -> Truck:
+    """Undo a deactivation. Past driver assignments stay closed."""
+    truck = await get_or_404(db, Truck, truck_id, "Truck", lock=True)
+    if not truck.is_active:
+        truck.is_active = True
+        await db.commit()
+    await db.refresh(truck)
+    return truck

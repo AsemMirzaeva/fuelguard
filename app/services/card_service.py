@@ -46,7 +46,11 @@ async def get_card(db: AsyncSession, card_id: int) -> FuelCard:
 
 
 async def change_status(
-    db: AsyncSession, card_id: int, new_status: CardStatus, changed_by: str
+    db: AsyncSession,
+    card_id: int,
+    new_status: CardStatus,
+    changed_by: str,
+    comment: str | None = None,
 ) -> FuelCard:
     card = await get_or_404(db, FuelCard, card_id, "Card", lock=True)
     if card.status == new_status:
@@ -59,7 +63,11 @@ async def change_status(
     async with commit_or_conflict(db, "Could not change card status"):
         db.add(
             CardStatusHistory(
-                card_id=card.id, old_status=card.status, new_status=new_status, changed_by=changed_by
+                card_id=card.id,
+                old_status=card.status,
+                new_status=new_status,
+                changed_by=changed_by,
+                comment=comment or None,
             )
         )
         card.status = new_status
@@ -99,6 +107,7 @@ async def deactivate_cards_of_driver(db: AsyncSession, driver_id: int) -> None:
                 old_status=CardStatus.ACTIVE,
                 new_status=CardStatus.INACTIVE,
                 changed_by="system:driver_deactivated",
+                comment="The driver was deactivated",
             )
         )
         card.status = CardStatus.INACTIVE

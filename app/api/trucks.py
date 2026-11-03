@@ -60,3 +60,18 @@ async def update_truck(truck_id: int, data: TruckUpdate, db: AsyncSession = Depe
 async def deactivate_truck(truck_id: int, db: AsyncSession = Depends(get_db)):
     await fleet_service.deactivate_truck(db, truck_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/{truck_id}/reactivate",
+    response_model=TruckRead,
+    responses=NOT_FOUND,
+    summary="Reactivate a truck",
+    description=(
+        "Undoes a deactivation. Past driver assignments stay closed; assign a driver again if needed. "
+        "Calling it on an active truck changes nothing."
+    ),
+    dependencies=[Depends(require_manager)],
+)
+async def reactivate_truck(truck_id: int, db: AsyncSession = Depends(get_db)):
+    return await fleet_service.reactivate_truck(db, truck_id)

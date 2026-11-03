@@ -84,6 +84,24 @@ async def deactivate_driver(driver_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post(
+    "/{driver_id}/reactivate",
+    response_model=DriverRead,
+    responses=NOT_FOUND,
+    summary="Reactivate a driver",
+    description=(
+        "Undoes a deactivation. Nothing else is restored: the truck assignment stays closed and the "
+        "driver's cards stay inactive until a manager assigns a truck and activates the cards again. "
+        "Calling it on an active driver changes nothing."
+    ),
+    dependencies=[Depends(require_manager)],
+)
+async def reactivate_driver(driver_id: int, db: AsyncSession = Depends(get_db)):
+    await fleet_service.reactivate_driver(db, driver_id)
+    driver, truck_id = await fleet_service.get_driver(db, driver_id)
+    return _out(driver, truck_id)
+
+
+@router.post(
     "/{driver_id}/assign-truck",
     response_model=AssignmentRead,
     responses={**NOT_FOUND, **CONFLICT, **INVALID_STATE},

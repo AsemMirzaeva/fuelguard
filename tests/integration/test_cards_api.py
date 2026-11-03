@@ -84,11 +84,46 @@ class TestStatus:
         d = await create_driver(manager)
         c = await create_card(manager, d["id"])
         for status in path:
-            r = await manager.patch(f"/cards/{c['id']}/status", json={"status": status})
+            r = await manager.patch(f"/cards/{c['id']}/status", json={"status": status, "comment": "why"})
             assert r.status_code == 200 and r.json()["status"] == status
         history = (await manager.get(f"/cards/{c['id']}/history")).json()
         assert [h["new_status"] for h in history] == ["active", *path]
         assert all(h["changed_by"] == MANAGER_USERNAME for h in history)
+
+    async def test_deactivating_or_blocking_needs_a_comment(self, manager):
+        d = await create_driver(manager)
+        c = await create_card(manager, d["id"])
+        for status in ("inactive", "blocked"):
+            for body in ({"status": status}, {"status": status, "comment": ""}, {"status": status, "comment": "   "},
+                         {"status": status, "comment": None}):
+                r = await manager.patch(f"/cards/{c['id']}/status", json=body)
+                assert r.status_code == 422, body
+                assert f"A comment is required to make a card {status}" in str(r.json())
+        assert (await manager.get(f"/cards/{c['id']}")).json()["status"] == "active"
+        assert len((await manager.get(f"/cards/{c['id']}/history")).json()) == 1
+
+    async def test_the_comment_is_trimmed_and_kept_in_the_history(self, manager):
+        d = await create_driver(manager)
+        c = await create_card(manager, d["id"])
+        await manager.patch(f"/cards/{c['id']}/status", json={"status": "blocked", "comment": "  Lost by driver  "})
+        await manager.patch(f"/cards/{c['id']}/status", json={"status": "active", "comment": "Found it"})
+        await manager.patch(f"/cards/{c['id']}/status", json={"status": "inactive", "comment": "x" * 500})
+        history = (await manager.get(f"/cards/{c['id']}/history")).json()
+        assert [h["comment"] for h in history] == [None, "Lost by driver", "Found it", "x" * 500]
+
+    async def test_activating_needs_no_comment_and_a_blank_one_is_stored_as_none(self, manager):
+        d = await create_driver(manager)
+        c = await create_card(manager, d["id"])
+        await manager.patch(f"/cards/{c['id']}/status", json={"status": "inactive", "comment": "pause"})
+        r = await manager.patch(f"/cards/{c['id']}/status", json={"status": "active", "comment": "  "})
+        assert r.status_code == 200
+        assert (await manager.get(f"/cards/{c['id']}/history")).json()[-1]["comment"] is None
+
+    async def test_a_comment_over_500_characters_is_refused(self, manager):
+        d = await create_driver(manager)
+        c = await create_card(manager, d["id"])
+        r = await manager.patch(f"/cards/{c['id']}/status", json={"status": "blocked", "comment": "x" * 501})
+        assert r.status_code == 422
 
     async def test_same_status_is_a_conflict_and_not_logged(self, manager):
         d = await create_driver(manager)
@@ -101,7 +136,7 @@ class TestStatus:
         d = await create_driver(manager)
         c = await create_card(manager, d["id"])
         assert (await manager.patch(f"/cards/{c['id']}/status", json={"status": "bogus"})).status_code == 422
-        assert (await manager.patch("/cards/999999/status", json={"status": "blocked"})).status_code == 404
+        assert (await manager.patch("/cards/999999/status", json={"status": "blocked", "comment": "test"})).status_code == 404
         assert (await manager.get("/cards/999999/history")).status_code == 404
 
     async def test_cannot_activate_a_card_of_an_inactive_driver(self, manager):
@@ -115,7 +150,7 @@ class TestStatus:
         d = await create_driver(manager)
         c = await create_card(manager, d["id"])
         results = await asyncio.gather(
-            *[manager.patch(f"/cards/{c['id']}/status", json={"status": "blocked"}) for _ in range(5)]
+            *[manager.patch(f"/cards/{c['id']}/status", json={"status": "blocked", "comment": "test"}) for _ in range(5)]
         )
         assert sorted(r.status_code for r in results) == [200, 409, 409, 409, 409]
         assert len((await manager.get(f"/cards/{c['id']}/history")).json()) == 2
@@ -125,7 +160,7 @@ class TestListAndGet:
     async def test_filters(self, manager):
         a, b = await create_driver(manager), await create_driver(manager)
         c1, c2 = await create_card(manager, a["id"]), await create_card(manager, b["id"])
-        await manager.patch(f"/cards/{c2['id']}/status", json={"status": "blocked"})
+        await manager.patch(f"/cards/{c2['id']}/status", json={"status": "blocked", "comment": "test"})
         ids = lambda r: [c["id"] for c in r.json()]  # noqa: E731
         assert ids(await manager.get("/cards", params={"driver_id": a["id"]})) == [c1["id"]]
         assert ids(await manager.get("/cards", params={"status": "blocked"})) == [c2["id"]]

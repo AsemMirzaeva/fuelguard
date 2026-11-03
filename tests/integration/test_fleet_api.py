@@ -78,7 +78,7 @@ class TestDriverSoftDelete:
         await assign(manager, d["id"], t["id"])
         active = await create_card(manager, d["id"])
         blocked = await create_card(manager, d["id"])
-        await manager.patch(f"/cards/{blocked['id']}/status", json={"status": "blocked"})
+        await manager.patch(f"/cards/{blocked['id']}/status", json={"status": "blocked", "comment": "test"})
 
         await manager.delete(f"/drivers/{d['id']}")
 
@@ -88,6 +88,7 @@ class TestDriverSoftDelete:
         history = (await manager.get(f"/cards/{active['id']}/history")).json()
         assert history[-1]["changed_by"] == "system:driver_deactivated"
         assert history[-1]["old_status"] == "active" and history[-1]["new_status"] == "inactive"
+        assert history[-1]["comment"] == "The driver was deactivated"
 
     async def test_inactive_driver_cannot_get_a_card_or_truck(self, manager):
         d, t = await create_driver(manager), await create_truck(manager)
@@ -140,6 +141,64 @@ class TestTrucks:
         r = await manager.post(f"/drivers/{d['id']}/assign-truck", json={"truck_id": t["id"]})
         assert r.status_code == 422 and "Truck is inactive" in r.json()["error"]["message"]
         assert (await manager.delete("/trucks/999999")).status_code == 404
+
+
+class TestDriverReactivate:
+    async def test_brings_the_driver_back_and_is_idempotent(self, manager):
+        d = await create_driver(manager)
+        await manager.delete(f"/drivers/{d['id']}")
+        r = await manager.post(f"/drivers/{d['id']}/reactivate")
+        assert r.status_code == 200
+        assert r.json()["is_active"] is True and r.json()["current_truck_id"] is None
+        assert (await manager.post(f"/drivers/{d['id']}/reactivate")).status_code == 200
+        assert (await manager.get(f"/drivers/{d['id']}")).json()["is_active"] is True
+
+    async def test_does_not_restore_truck_or_cards(self, manager):
+        d, t = await create_driver(manager), await create_truck(manager)
+        await assign(manager, d["id"], t["id"])
+        card = await create_card(manager, d["id"])
+        await manager.delete(f"/drivers/{d['id']}")
+        await manager.post(f"/drivers/{d['id']}/reactivate")
+        assert (await manager.get(f"/drivers/{d['id']}")).json()["current_truck_id"] is None
+        assert (await manager.get(f"/cards/{card['id']}")).json()["status"] == "inactive"
+
+    async def test_can_get_a_card_and_truck_again(self, manager):
+        d, t = await create_driver(manager), await create_truck(manager)
+        await manager.delete(f"/drivers/{d['id']}")
+        await manager.post(f"/drivers/{d['id']}/reactivate")
+        r = await manager.post("/cards", json={"card_number": unique("C"), "driver_id": d["id"]})
+        assert r.status_code == 201
+        assert (await assign(manager, d["id"], t["id"]))["truck_id"] == t["id"]
+
+    async def test_on_an_active_driver_keeps_the_truck(self, manager):
+        d, t = await create_driver(manager), await create_truck(manager)
+        await assign(manager, d["id"], t["id"])
+        r = await manager.post(f"/drivers/{d['id']}/reactivate")
+        assert r.json()["current_truck_id"] == t["id"]
+
+    async def test_unknown_driver(self, manager):
+        assert (await manager.post("/drivers/999999/reactivate")).status_code == 404
+
+
+class TestTruckReactivate:
+    async def test_brings_the_truck_back_and_is_idempotent(self, manager):
+        t = await create_truck(manager)
+        await manager.delete(f"/trucks/{t['id']}")
+        r = await manager.post(f"/trucks/{t['id']}/reactivate")
+        assert r.status_code == 200 and r.json()["is_active"] is True
+        assert (await manager.post(f"/trucks/{t['id']}/reactivate")).status_code == 200
+        assert (await manager.get(f"/trucks/{t['id']}")).json()["is_active"] is True
+
+    async def test_past_assignments_stay_closed_but_new_ones_work(self, manager):
+        t, d = await create_truck(manager), await create_driver(manager)
+        await assign(manager, d["id"], t["id"])
+        await manager.delete(f"/trucks/{t['id']}")
+        await manager.post(f"/trucks/{t['id']}/reactivate")
+        assert (await manager.get(f"/drivers/{d['id']}")).json()["current_truck_id"] is None
+        assert (await assign(manager, d["id"], t["id"]))["truck_id"] == t["id"]
+
+    async def test_unknown_truck(self, manager):
+        assert (await manager.post("/trucks/999999/reactivate")).status_code == 404
 
 
 class TestAssignments:

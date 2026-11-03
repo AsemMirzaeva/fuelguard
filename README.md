@@ -153,7 +153,7 @@ curl -s $API/transactions/flagged -H "Authorization: Bearer $MT"
 curl -s $API/notifications -H "Authorization: Bearer $MT"
 
 # 5. Block the card: the next purchase is declined at the pump, and the attempt is still stored
-curl -s -X PATCH $API/cards/1/status -H "Authorization: Bearer $MT" -H "$J" -d '{"status":"blocked"}'
+curl -s -X PATCH $API/cards/1/status -H "Authorization: Bearer $MT" -H "$J" -d '{"status":"blocked","comment":"Card reported lost"}'
 curl -s -X POST $API/transactions -H "Authorization: Bearer $TT" -H "$J" -H "Idempotency-Key: demo-0003" \
   -d '{"card_number":"7001-2345-6789","station_id":1,"gallons":"10","total_price":"35.00"}'
 #    -> "authorized": false, "decline_reason": "card_blocked"
@@ -372,7 +372,7 @@ erDiagram
 | `drivers`, `trucks` | Soft delete (`is_active`), so history keeps pointing at them. Truck has `tank_capacity_gal`. |
 | `driver_truck_assignments` | History of who drove what. `unassigned_at IS NULL` means current. A partial unique index allows one current truck per driver; several drivers may share a truck. |
 | `fuel_cards` | Status `active` / `inactive` / `blocked`; four optional limits (per transaction, daily, weekly, monthly). |
-| `card_status_history` | Who changed a card's status, and when (including automatic changes). |
+| `card_status_history` | Who changed a card's status, when, and why (the comment; deactivating or blocking requires one, automatic changes get one too). |
 | `fuel_transactions` | Card, driver, truck and station, gallons, price, server UTC time, status `pending` / `approved` / `declined`, decline reason, review fields. Unique `idempotency_key`. |
 | `transaction_flags` | One row per reason per transaction (unique), with a JSON `details` of the numbers. |
 | `notifications`, `daily_reports` | Alerts for managers; one report row per card and day (unique, so re-running updates it). |
@@ -397,8 +397,8 @@ except `POST /transactions`, which only a `terminal` token may call. `/health` n
 
 | Area | Endpoints |
 |---|---|
-| Drivers | `POST/GET /drivers`, `GET/PATCH/DELETE /drivers/{id}`, `POST /drivers/{id}/assign-truck`, `POST /drivers/{id}/unassign-truck`, `GET /drivers/{id}/assignments` |
-| Trucks | `POST/GET /trucks`, `GET/PATCH/DELETE /trucks/{id}` |
+| Drivers | `POST/GET /drivers`, `GET/PATCH/DELETE /drivers/{id}`, `POST /drivers/{id}/reactivate`, `POST /drivers/{id}/assign-truck`, `POST /drivers/{id}/unassign-truck`, `GET /drivers/{id}/assignments` |
+| Trucks | `POST/GET /trucks`, `GET/PATCH/DELETE /trucks/{id}`, `POST /trucks/{id}/reactivate` |
 | Cards | `POST/GET /cards`, `GET /cards/{id}`, `PATCH /cards/{id}/status`, `PATCH /cards/{id}/limits`, `GET /cards/{id}/history` |
 | Stations | `POST/GET /stations`, `GET /stations/{id}` |
 | Purchase (terminal only) | `POST /transactions` |
@@ -409,7 +409,8 @@ except `POST /transactions`, which only a `terminal` token may call. `/health` n
 
 `DELETE` on a driver or truck is a soft delete. Deleting a driver also closes the driver's truck
 assignment and switches the driver's active cards to `inactive` (blocked cards stay blocked), so a removed
-driver cannot keep fuelling.
+driver cannot keep fuelling. `POST .../reactivate` undoes a deactivation but restores nothing else: the truck
+assignment stays closed and the cards stay `inactive` until a manager sets them up again.
 
 ## Configuration
 

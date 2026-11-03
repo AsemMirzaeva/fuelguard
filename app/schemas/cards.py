@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.enums import CardStatus
 
@@ -30,7 +30,21 @@ class CardLimitsUpdate(BaseModel):
 
 
 class CardStatusUpdate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     status: CardStatus
+    comment: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Why the card is being deactivated or blocked. Required for those two, optional for activate.",
+        examples=["Card reported lost by the driver"],
+    )
+
+    @model_validator(mode="after")
+    def reason_is_required_to_switch_a_card_off(self):
+        if self.status != CardStatus.ACTIVE and not self.comment:
+            raise ValueError(f"A comment is required to make a card {self.status.value}")
+        return self
 
 
 class CardRead(BaseModel):
@@ -55,4 +69,5 @@ class CardStatusHistoryRead(BaseModel):
     old_status: CardStatus | None
     new_status: CardStatus
     changed_by: str
+    comment: str | None
     changed_at: datetime

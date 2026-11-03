@@ -47,7 +47,7 @@ ALLOWED = {  # which kinds of route each role may call
 
 
 def test_the_matrix_covers_every_endpoint():
-    assert len(ROUTES) == 32  # 33 operations minus /health
+    assert len(ROUTES) == 34  # 35 operations minus /health
     assert {k for *_, k in ROUTES} == {"read", "write", "terminal"}
 
 
@@ -128,7 +128,7 @@ class TestAuditorIsReadOnly:
         assert (await auditor.get("/transactions/flagged")).status_code == 200
         assert (await auditor.get("/reports/daily")).status_code == 200
 
-        r = await auditor.patch(f"/cards/{w.card_id}/status", json={"status": "blocked"})
+        r = await auditor.patch(f"/cards/{w.card_id}/status", json={"status": "blocked", "comment": "test"})
         assert r.status_code == 403
         assert (await manager.get(f"/cards/{w.card_id}")).json()["status"] == "active"  # unchanged
         assert (await auditor.delete(f"/drivers/{w.driver_id}")).status_code == 403
@@ -163,7 +163,7 @@ class TestAuditTrail:
         driver = await create_driver(manager)
 
         card = await create_card(alice, driver["id"])
-        await bob.patch(f"/cards/{card['id']}/status", json={"status": "blocked"})
+        await bob.patch(f"/cards/{card['id']}/status", json={"status": "blocked", "comment": "test"})
         await alice.patch(f"/cards/{card['id']}/status", json={"status": "active"})
 
         history = (await manager.get(f"/cards/{card['id']}/history")).json()
