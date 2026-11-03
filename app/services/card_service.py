@@ -13,13 +13,17 @@ async def create_card(db: AsyncSession, data: CardCreate, changed_by: str) -> Fu
     if not driver.is_active:
         raise InvalidStateError("Cannot issue a card to an inactive driver")
 
-    card = FuelCard(**data.model_dump(), status=CardStatus.ACTIVE)
+    card = FuelCard(**data.model_dump(), status=CardStatus.INACTIVE)
     async with commit_or_conflict(db, "A card with this number already exists"):
         db.add(card)
         await db.flush()
         db.add(
             CardStatusHistory(
-                card_id=card.id, old_status=None, new_status=CardStatus.ACTIVE, changed_by=changed_by
+                card_id=card.id,
+                old_status=None,
+                new_status=CardStatus.INACTIVE,
+                changed_by=changed_by,
+                comment="Card issued",
             )
         )
     await db.refresh(card)

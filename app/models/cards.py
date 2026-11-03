@@ -25,7 +25,7 @@ class FuelCard(Base):
     card_number: Mapped[str] = mapped_column(String(32), unique=True)
     driver_id: Mapped[int] = mapped_column(ForeignKey("drivers.id"))
     status: Mapped[CardStatus] = mapped_column(
-        db_enum(CardStatus, 20), default=CardStatus.ACTIVE
+        db_enum(CardStatus, 20), default=CardStatus.INACTIVE
     )
     per_transaction_limit: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     daily_limit: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))

@@ -29,7 +29,10 @@ router = APIRouter(
     status_code=status.HTTP_201_CREATED,
     responses={**NOT_FOUND, **CONFLICT, **INVALID_STATE},
     summary="Issue a card to a driver",
-    description="New cards start as active. Limits are optional; a missing limit is not checked.",
+    description=(
+        "New cards start inactive: a manager activates a card when it is handed to the driver. "
+        "Limits are optional; a missing limit is not checked."
+    ),
 )
 async def create_card(
     data: CardCreate,

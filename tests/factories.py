@@ -39,11 +39,17 @@ async def create_truck(manager, capacity: str = "100", **overrides) -> dict:
     return r.json()
 
 
-async def create_card(manager, driver_id: int, **overrides) -> dict:
+async def create_card(manager, driver_id: int, *, activate: bool = True, **overrides) -> dict:
+    """Issue a card. New cards start inactive, so by default the helper activates it too."""
     body = {"card_number": unique("CARD"), "driver_id": driver_id} | overrides
     r = await manager.post("/cards", json=body)
     assert r.status_code == 201, r.text
-    return r.json()
+    card = r.json()
+    if activate:
+        r = await manager.patch(f"/cards/{card['id']}/status", json={"status": "active"})
+        assert r.status_code == 200, r.text
+        card = r.json()
+    return card
 
 
 async def assign(manager, driver_id: int, truck_id: int) -> dict:

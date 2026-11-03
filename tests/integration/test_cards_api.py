@@ -7,12 +7,20 @@ from tests.tokens import MANAGER_USERNAME
 
 
 class TestCreate:
-    async def test_new_card_is_active_with_a_history_entry(self, manager):
+    async def test_new_card_is_inactive_with_a_history_entry(self, manager):
         d = await create_driver(manager)
-        card = await create_card(manager, d["id"])
-        assert card["status"] == "active" and card["driver_id"] == d["id"]
+        card = await create_card(manager, d["id"], activate=False)
+        assert card["status"] == "inactive" and card["driver_id"] == d["id"]
         history = (await manager.get(f"/cards/{card['id']}/history")).json()
-        assert [(h["old_status"], h["new_status"]) for h in history] == [(None, "active")]
+        assert [(h["old_status"], h["new_status"], h["comment"]) for h in history] == [(None, "inactive", "Card issued")]
+        assert history[0]["changed_by"] == MANAGER_USERNAME
+
+    async def test_an_issued_card_cannot_buy_until_it_is_activated(self, manager):
+        d = await create_driver(manager)
+        card = await create_card(manager, d["id"], activate=False)
+        assert (await manager.get(f"/cards/{card['id']}")).json()["status"] == "inactive"
+        r = await manager.patch(f"/cards/{card['id']}/status", json={"status": "active"})
+        assert r.status_code == 200 and r.json()["status"] == "active"
 
     async def test_limits_are_optional_and_normalized(self, manager):
         d = await create_driver(manager)
@@ -87,7 +95,7 @@ class TestStatus:
             r = await manager.patch(f"/cards/{c['id']}/status", json={"status": status, "comment": "why"})
             assert r.status_code == 200 and r.json()["status"] == status
         history = (await manager.get(f"/cards/{c['id']}/history")).json()
-        assert [h["new_status"] for h in history] == ["active", *path]
+        assert [h["new_status"] for h in history] == ["inactive", "active", *path]  # issued, then activated
         assert all(h["changed_by"] == MANAGER_USERNAME for h in history)
 
     async def test_a_blocked_card_cannot_be_deactivated(self, manager):
@@ -98,7 +106,7 @@ class TestStatus:
         assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_state"
         assert "can only be unblocked" in r.json()["error"]["message"]
         assert (await manager.get(f"/cards/{c['id']}")).json()["status"] == "blocked"
-        assert len((await manager.get(f"/cards/{c['id']}/history")).json()) == 2
+        assert len((await manager.get(f"/cards/{c['id']}/history")).json()) == 3
 
     async def test_lifting_a_block_needs_a_comment(self, manager):
         d = await create_driver(manager)
@@ -131,7 +139,7 @@ class TestStatus:
                 assert r.status_code == 422, body
                 assert f"A comment is required to make a card {status}" in str(r.json())
         assert (await manager.get(f"/cards/{c['id']}")).json()["status"] == "active"
-        assert len((await manager.get(f"/cards/{c['id']}/history")).json()) == 1
+        assert len((await manager.get(f"/cards/{c['id']}/history")).json()) == 2
 
     async def test_the_comment_is_trimmed_and_kept_in_the_history(self, manager):
         d = await create_driver(manager)
@@ -140,7 +148,7 @@ class TestStatus:
         await manager.patch(f"/cards/{c['id']}/status", json={"status": "active", "comment": "Found it"})
         await manager.patch(f"/cards/{c['id']}/status", json={"status": "inactive", "comment": "x" * 500})
         history = (await manager.get(f"/cards/{c['id']}/history")).json()
-        assert [h["comment"] for h in history] == [None, "Lost by driver", "Found it", "x" * 500]
+        assert [h["comment"] for h in history] == ["Card issued", None, "Lost by driver", "Found it", "x" * 500]
 
     async def test_activating_needs_no_comment_and_a_blank_one_is_stored_as_none(self, manager):
         d = await create_driver(manager)
@@ -161,7 +169,7 @@ class TestStatus:
         c = await create_card(manager, d["id"])
         r = await manager.patch(f"/cards/{c['id']}/status", json={"status": "active"})
         assert r.status_code == 409 and "already active" in r.json()["error"]["message"]
-        assert len((await manager.get(f"/cards/{c['id']}/history")).json()) == 1
+        assert len((await manager.get(f"/cards/{c['id']}/history")).json()) == 2
 
     async def test_unknown_status_and_unknown_card(self, manager):
         d = await create_driver(manager)
@@ -184,7 +192,7 @@ class TestStatus:
             *[manager.patch(f"/cards/{c['id']}/status", json={"status": "blocked", "comment": "test"}) for _ in range(5)]
         )
         assert sorted(r.status_code for r in results) == [200, 409, 409, 409, 409]
-        assert len((await manager.get(f"/cards/{c['id']}/history")).json()) == 2
+        assert len((await manager.get(f"/cards/{c['id']}/history")).json()) == 3
 
 
 class TestListAndGet:

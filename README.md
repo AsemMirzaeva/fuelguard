@@ -26,7 +26,7 @@ Celery + Redis · OAuth2 / OpenID Connect (Keycloak) · Docker Compose · Pytest
 | Requirement | Where |
 |---|---|
 | Manage drivers and trucks, assign drivers to trucks | `/drivers`, `/trucks`, `/drivers/{id}/assign-truck` |
-| Issue cards; activate, deactivate, block; configure limits | `/cards`, `/cards/{id}/status`, `/cards/{id}/limits` |
+| Issue cards (they start inactive until activated); activate, deactivate, block; configure limits | `/cards`, `/cards/{id}/status`, `/cards/{id}/limits` |
 | Simulate a fuel card purchase, validate against status and limits | `POST /transactions` ([flow](#how-a-purchase-works)) |
 | Flag limit, tank, unusually large and burst purchases; keep them for review | [Risk rules](#risk-rules), `/transactions/flagged`, `/transactions/{id}/review` |
 | At least two background workflows, with the reasoning | [Four workflows](#background-processing) on Celery + Redis |
@@ -136,6 +136,8 @@ curl -s -X POST $API/trucks   -H "Authorization: Bearer $MT" -H "$J" -d '{"plate
 curl -s -X POST $API/drivers/1/assign-truck -H "Authorization: Bearer $MT" -H "$J" -d '{"truck_id":1}'
 curl -s -X POST $API/cards    -H "Authorization: Bearer $MT" -H "$J" \
   -d '{"card_number":"7001-2345-6789","driver_id":1,"per_transaction_limit":"300","daily_limit":"500"}'
+#    New cards start inactive (a purchase would be declined), so activate it when the card is handed over:
+curl -s -X PATCH $API/cards/1/status -H "Authorization: Bearer $MT" -H "$J" -d '{"status":"active"}'
 
 # 2. A normal purchase, sent by the terminal: accepted, no flags
 curl -s -X POST $API/transactions -H "Authorization: Bearer $TT" -H "$J" -H "Idempotency-Key: demo-0001" \

@@ -168,7 +168,7 @@ class TestAuditTrail:
 
         history = (await manager.get(f"/cards/{card['id']}/history")).json()
         assert [(h["new_status"], h["changed_by"]) for h in history] == [
-            ("active", "alice"), ("blocked", "bob"), ("active", "alice"),
+            ("inactive", "alice"), ("active", "alice"), ("blocked", "bob"), ("active", "alice"),
         ]  # fmt: skip
 
     async def test_falls_back_to_the_subject_when_there_is_no_username(self, client_with, manager):
