@@ -80,8 +80,7 @@ class TestAuth:
         assert (await terminal.get("/transactions")).status_code == 401
 
     async def test_health_is_public(self, anon):
-        r = await anon.get("/health")
-        assert r.status_code == 200 and r.json()["status"] == "ok"
+        assert (await anon.get("/health")).status_code == 200  # more in test_health.py
 
 
 class TestErrorFormatAndDocs:

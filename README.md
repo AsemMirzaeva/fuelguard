@@ -29,7 +29,7 @@ Celery + Redis · Docker Compose · Pytest
 | Simulate a fuel card purchase, validate against status and limits | `POST /transactions` ([flow](#how-a-purchase-works)) |
 | Flag limit, tank, unusually large and burst purchases; keep them for review | [Risk rules](#risk-rules), `/transactions/flagged`, `/transactions/{id}/review` |
 | At least two background workflows, with the reasoning | [Four workflows](#background-processing) on Celery + Redis |
-| Alembic migrations, Docker Compose, tests, logging, env config, OpenAPI | `alembic/`, `docker-compose.yml`, 318 tests, `/docs` |
+| Alembic migrations, Docker Compose, tests, logging, env config, OpenAPI | `alembic/`, `docker-compose.yml`, 332 tests, `/docs` |
 
 ## Quick start
 
@@ -45,7 +45,7 @@ docker compose up --build   # builds the image, starts everything, applies the m
 |---|---|
 | Swagger UI (try every endpoint) | http://localhost:8010/docs |
 | ReDoc / OpenAPI JSON | http://localhost:8010/redoc · http://localhost:8010/openapi.json |
-| Health check | http://localhost:8010/health |
+| Health check (database and Redis; 503 if either is down) | http://localhost:8010/health |
 | PostgreSQL | `localhost:5442` (user, password and database from `.env`) |
 | Redis | `localhost:6380` |
 
@@ -222,6 +222,7 @@ repeated without losing or duplicating data.**
 | The same job runs twice (retry, duplicate message, recovery) | Jobs are **idempotent**: the transaction row is locked, anything not `pending` is skipped, flags have a unique constraint per transaction and reason, and notifications are created once. Running twice changes nothing. |
 | Notification could not be queued after the flags were saved | Logged. The recovery job also finds flagged transactions that have no notification and queues them. |
 | A bug in a job (not a database error) | Not retried (retrying cannot fix it); logged by the task failure handler. |
+| Someone needs to know whether the service can work right now | `GET /health` checks PostgreSQL and Redis (3 s timeout each) and returns 503 with `{"checks": {"database": "ok", "redis": "error"}}` when one is down. It does not check that a worker is running; unfinished background work shows in `GET /transactions/stuck`. |
 | Unexpected exception in the API | Returned as a generic `500` in the standard error format. Details go to the log, never to the client. |
 
 All API errors share one JSON shape, with a stable `code` for programs and a `message` for people:
@@ -328,7 +329,7 @@ Lists accept `limit` (1–100, default 50) and `offset`.
 | Review | `GET /transactions`, `GET /transactions/flagged`, `GET /transactions/stuck`, `GET /transactions/{id}`, `PATCH /transactions/{id}/review` | manager |
 | Alerts | `GET /notifications`, `PATCH /notifications/{id}/read` | manager |
 | Reports | `GET /reports/daily`, `POST /reports/daily/run` | manager |
-| Health | `GET /health` | none |
+| Health | `GET /health` (200 when PostgreSQL and Redis answer, otherwise 503 with the failing check named) | none |
 
 `DELETE` on a driver or truck is a soft delete. Deleting a driver also closes the driver's truck
 assignment and switches the driver's active cards to `inactive` (blocked cards stay blocked), so a removed
@@ -356,12 +357,12 @@ required setting is missing, and API keys must be at least 8 characters.
 docker compose run --rm --build tests
 ```
 
-**318 tests, all against a real PostgreSQL** (no SQLite, no mocked database), 100 % line coverage of `app/`.
+**332 tests, all against a real PostgreSQL** (no SQLite, no mocked database), 100 % line coverage of `app/`.
 
 | Folder | Tests | What |
 |---|---|---|
 | `tests/unit` | 56 | the risk rules (including exact boundaries), schema validation, settings, logging, queue-outage handling |
-| `tests/integration` | 170 | every endpoint through the real app: auth, validation, error format, purchase decisions and their priority, idempotency, review, reports, parallel requests, migrations |
+| `tests/integration` | 184 | every endpoint through the real app: auth, validation, error format, purchase decisions and their priority, idempotency, review, reports, health check, parallel requests, migrations |
 | `tests/workers` | 92 | the analysis against backdated history, burst checks, notifications, reports, recovery, and **retries** (flaky database, giving up, no half-written data) |
 
 How the tests stay safe and honest:

@@ -30,6 +30,17 @@ def queued(monkeypatch):
     return calls
 
 
+@pytest.fixture(autouse=True)
+def _redis_reports_healthy(monkeypatch):
+    """The test container has no Redis (its address points nowhere on purpose), so /health
+    would report it as down. Tests of the health check itself override this."""
+
+    async def healthy() -> bool:
+        return True
+
+    monkeypatch.setattr("app.api.health.check_redis", healthy)
+
+
 def _client(headers=None, raise_app_exceptions=True) -> AsyncClient:
     from app.main import app
 

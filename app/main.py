@@ -1,14 +1,10 @@
 import logging
 
-from fastapi import Depends, FastAPI
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import FastAPI
 
-from app.api import cards, drivers, notifications, reports, stations, transactions, trucks
-from app.core.config import get_settings
+from app.api import cards, drivers, health, notifications, reports, stations, transactions, trucks
 from app.core.errors import ErrorResponse, register_error_handlers
 from app.core.logging import setup_logging
-from app.db.async_db import get_db
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -45,9 +41,4 @@ app.include_router(stations.router)
 app.include_router(transactions.router)
 app.include_router(notifications.router)
 app.include_router(reports.router)
-
-
-@app.get("/health", tags=["Health"])
-async def health(db: AsyncSession = Depends(get_db)) -> dict:
-    await db.execute(text("SELECT 1"))
-    return {"status": "ok", "env": get_settings().app_env}
+app.include_router(health.router)
