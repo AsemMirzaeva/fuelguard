@@ -32,8 +32,7 @@ class TestSettings:
         database_url_async="postgresql+asyncpg://x",
         database_url_sync="postgresql+psycopg2://x",
         redis_url="redis://x",
-        manager_api_key="m" * 8,
-        terminal_api_key="t" * 8,
+        oidc_issuer="http://localhost:8180/realms/fuelguard",
     )
 
     def test_defaults_match_the_agreed_rules(self):
@@ -43,14 +42,15 @@ class TestSettings:
         assert s.large_purchase_fallback_tank_ratio == 0.8
         assert (s.stuck_after_minutes, s.recovery_interval_seconds) == (5, 120)
 
-    def test_short_api_key_is_rejected(self):
+    def test_a_too_short_issuer_is_rejected(self):
         with pytest.raises(ValidationError):
-            Settings(_env_file=None, **{**self.ENV, "manager_api_key": "short"})
+            Settings(_env_file=None, **{**self.ENV, "oidc_issuer": "x"})
 
-    def test_missing_required_setting_is_rejected(self, monkeypatch):
-        monkeypatch.delenv("REDIS_URL")  # the container provides it, so remove it for this test
+    @pytest.mark.parametrize("missing", ["redis_url", "oidc_issuer"])
+    def test_missing_required_setting_is_rejected(self, monkeypatch, missing):
+        monkeypatch.delenv(missing.upper())  # the container provides it, so remove it for this test
         env = dict(self.ENV)
-        del env["redis_url"]
+        del env[missing]
         with pytest.raises(ValidationError):
             Settings(_env_file=None, **env)
 

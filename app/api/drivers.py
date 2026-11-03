@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import PageParams
 from app.core.errors import AUTH_ERRORS, CONFLICT, INVALID_STATE, NOT_FOUND
-from app.core.security import require_manager
+from app.core.security import require_manager, require_reader
 from app.db.async_db import get_db
 from app.models import Driver
 from app.schemas.fleet import (
@@ -18,7 +18,7 @@ from app.services import fleet_service
 router = APIRouter(
     prefix="/drivers",
     tags=["Drivers"],
-    dependencies=[Depends(require_manager)],
+    dependencies=[Depends(require_reader)],
     responses=AUTH_ERRORS,
 )
 
@@ -29,7 +29,13 @@ def _out(driver: Driver, current_truck_id: int | None = None) -> DriverRead:
     )
 
 
-@router.post("", response_model=DriverRead, status_code=status.HTTP_201_CREATED, responses=CONFLICT)
+@router.post(
+    "",
+    response_model=DriverRead,
+    status_code=status.HTTP_201_CREATED,
+    responses=CONFLICT,
+    dependencies=[Depends(require_manager)],
+)
 async def create_driver(data: DriverCreate, db: AsyncSession = Depends(get_db)):
     return _out(await fleet_service.create_driver(db, data))
 
@@ -48,7 +54,12 @@ async def get_driver(driver_id: int, db: AsyncSession = Depends(get_db)):
     return _out(driver, truck_id)
 
 
-@router.patch("/{driver_id}", response_model=DriverRead, responses={**NOT_FOUND, **CONFLICT})
+@router.patch(
+    "/{driver_id}",
+    response_model=DriverRead,
+    responses={**NOT_FOUND, **CONFLICT},
+    dependencies=[Depends(require_manager)],
+)
 async def update_driver(driver_id: int, data: DriverUpdate, db: AsyncSession = Depends(get_db)):
     await fleet_service.update_driver(db, driver_id, data)
     driver, truck_id = await fleet_service.get_driver(db, driver_id)
@@ -65,6 +76,7 @@ async def update_driver(driver_id: int, data: DriverUpdate, db: AsyncSession = D
         "The current truck assignment is closed and the driver's active cards are "
         "switched to inactive (blocked cards stay blocked)."
     ),
+    dependencies=[Depends(require_manager)],
 )
 async def deactivate_driver(driver_id: int, db: AsyncSession = Depends(get_db)):
     await fleet_service.deactivate_driver(db, driver_id)
@@ -81,6 +93,7 @@ async def deactivate_driver(driver_id: int, db: AsyncSession = Depends(get_db)):
         "This is also how a manager allows a driver to use a different truck: "
         "purchases with a truck that does not match the assignment are declined."
     ),
+    dependencies=[Depends(require_manager)],
 )
 async def assign_truck(
     driver_id: int, data: AssignTruckRequest, db: AsyncSession = Depends(get_db)
@@ -92,6 +105,7 @@ async def assign_truck(
     "/{driver_id}/unassign-truck",
     response_model=AssignmentRead,
     responses={**NOT_FOUND, **INVALID_STATE},
+    dependencies=[Depends(require_manager)],
 )
 async def unassign_truck(driver_id: int, db: AsyncSession = Depends(get_db)):
     return await fleet_service.unassign_truck(db, driver_id)

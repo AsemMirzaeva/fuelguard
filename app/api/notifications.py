@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import PageParams
 from app.core.errors import AUTH_ERRORS, NOT_FOUND
-from app.core.security import require_manager
+from app.core.security import require_manager, require_reader
 from app.db.async_db import get_db
 from app.schemas.reporting import NotificationRead
 from app.services import report_service
@@ -11,7 +11,7 @@ from app.services import report_service
 router = APIRouter(
     prefix="/notifications",
     tags=["Notifications"],
-    dependencies=[Depends(require_manager)],
+    dependencies=[Depends(require_reader)],
     responses=AUTH_ERRORS,
 )
 
@@ -27,6 +27,11 @@ async def list_notifications(
     return await report_service.list_notifications(db, unread, page.limit, page.offset)
 
 
-@router.patch("/{notification_id}/read", response_model=NotificationRead, responses=NOT_FOUND)
+@router.patch(
+    "/{notification_id}/read",
+    response_model=NotificationRead,
+    responses=NOT_FOUND,
+    dependencies=[Depends(require_manager)],
+)
 async def mark_read(notification_id: int, db: AsyncSession = Depends(get_db)):
     return await report_service.mark_read(db, notification_id)

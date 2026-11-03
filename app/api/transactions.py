@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import PageParams
 from app.core.errors import AUTH_ERRORS, CONFLICT, INVALID_STATE, NOT_FOUND
-from app.core.security import require_manager, require_terminal
+from app.core.security import require_manager, require_reader, require_terminal
 from app.db.async_db import get_db
 from app.models.enums import FlagReason, ReviewStatus, TransactionStatus
 from app.schemas.transactions import (
@@ -66,7 +66,7 @@ async def create_purchase(
 @router.get(
     "",
     response_model=list[TransactionRead],
-    dependencies=[Depends(require_manager)],
+    dependencies=[Depends(require_reader)],
     summary="List transactions (newest first)",
 )
 async def list_transactions(
@@ -88,7 +88,7 @@ async def list_transactions(
 @router.get(
     "/flagged",
     response_model=list[TransactionDetail],
-    dependencies=[Depends(require_manager)],
+    dependencies=[Depends(require_reader)],
     summary="Suspicious transactions waiting for review",
     description=(
         "Every transaction with at least one risk flag, newest first, with the flags and "
@@ -115,7 +115,7 @@ async def list_flagged(
 @router.get(
     "/stuck",
     response_model=list[TransactionRead],
-    dependencies=[Depends(require_manager)],
+    dependencies=[Depends(require_reader)],
     summary="Transactions the background analysis has not finished",
     description=(
         "Pending transactions (and declined attempts not yet checked) older than "
@@ -133,7 +133,7 @@ async def list_stuck(
 @router.get(
     "/{transaction_id}",
     response_model=TransactionDetail,
-    dependencies=[Depends(require_manager)],
+    dependencies=[Depends(require_reader)],
     responses=NOT_FOUND,
 )
 async def get_transaction(transaction_id: int, db: AsyncSession = Depends(get_db)):

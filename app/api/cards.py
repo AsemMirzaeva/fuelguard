@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import PageParams
 from app.core.errors import AUTH_ERRORS, CONFLICT, INVALID_STATE, NOT_FOUND
-from app.core.security import require_manager
+from app.core.security import Principal, require_manager, require_reader
 from app.db.async_db import get_db
 from app.models.enums import CardStatus
 from app.schemas.cards import (
@@ -18,7 +18,7 @@ from app.services import card_service
 router = APIRouter(
     prefix="/cards",
     tags=["Cards"],
-    dependencies=[Depends(require_manager)],
+    dependencies=[Depends(require_reader)],
     responses=AUTH_ERRORS,
 )
 
@@ -31,8 +31,12 @@ router = APIRouter(
     summary="Issue a card to a driver",
     description="New cards start as active. Limits are optional; a missing limit is not checked.",
 )
-async def create_card(data: CardCreate, db: AsyncSession = Depends(get_db)):
-    return await card_service.create_card(db, data)
+async def create_card(
+    data: CardCreate,
+    db: AsyncSession = Depends(get_db),
+    user: Principal = Depends(require_manager),
+):
+    return await card_service.create_card(db, data, user.username)
 
 
 @router.get("", response_model=list[CardRead])
@@ -57,13 +61,17 @@ async def get_card(card_id: int, db: AsyncSession = Depends(get_db)):
     summary="Activate, deactivate or block a card",
     description=(
         "Any status can change to any other, including lifting a block. "
-        "Only active cards can make purchases. Every change is written to the card's history."
+        "Only active cards can make purchases. Every change is written to the card's history, "
+        "with the username of the person who made it."
     ),
 )
 async def change_status(
-    card_id: int, data: CardStatusUpdate, db: AsyncSession = Depends(get_db)
+    card_id: int,
+    data: CardStatusUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: Principal = Depends(require_manager),
 ):
-    return await card_service.change_status(db, card_id, data.status)
+    return await card_service.change_status(db, card_id, data.status, user.username)
 
 
 @router.patch(
@@ -72,6 +80,7 @@ async def change_status(
     responses=NOT_FOUND,
     summary="Configure spending limits",
     description="Send only the limits to change. An explicit null removes that limit.",
+    dependencies=[Depends(require_manager)],
 )
 async def update_limits(
     card_id: int, data: CardLimitsUpdate, db: AsyncSession = Depends(get_db)

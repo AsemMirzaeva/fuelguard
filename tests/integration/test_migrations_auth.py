@@ -1,14 +1,10 @@
-import pytest
 from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from sqlalchemy import inspect
 
-from app.core.config import get_settings
 from app.db.base import Base
 from app.db.sync_db import sync_engine
-
-settings = get_settings()
 
 
 class TestMigrations:
@@ -40,49 +36,6 @@ class TestMigrations:
                 "ix_fuel_transactions_pending"} <= names  # fmt: skip
 
 
-MANAGER_ENDPOINTS = [
-    ("GET", "/drivers"), ("POST", "/drivers"), ("GET", "/trucks"), ("GET", "/cards"),
-    ("GET", "/stations"), ("GET", "/transactions"), ("GET", "/transactions/flagged"),
-    ("GET", "/transactions/stuck"), ("GET", "/transactions/1"), ("PATCH", "/transactions/1/review"),
-    ("GET", "/notifications"), ("GET", "/reports/daily"), ("POST", "/reports/daily/run"),
-]  # fmt: skip
-
-
-class TestAuth:
-    @pytest.mark.parametrize("method, path", MANAGER_ENDPOINTS)
-    async def test_manager_endpoints_need_a_key(self, anon, method, path):
-        r = await anon.request(method, path, json={})
-        assert r.status_code == 401
-        assert r.json()["error"]["message"] == "Missing API key"
-
-    @pytest.mark.parametrize("method, path", MANAGER_ENDPOINTS)
-    async def test_manager_endpoints_reject_a_wrong_key(self, anon, method, path):
-        r = await anon.request(method, path, json={}, headers={"X-Manager-Key": "wrong-key-123"})
-        assert r.status_code == 403
-
-    async def test_terminal_key_does_not_open_manager_endpoints(self, terminal):
-        r = await terminal.get("/drivers", headers={"X-Manager-Key": settings.terminal_api_key})
-        assert r.status_code == 403
-
-    async def test_manager_key_does_not_open_the_purchase_endpoint(self, anon):
-        r = await anon.post(
-            "/transactions",
-            json={},
-            headers={"X-Terminal-Key": settings.manager_api_key, "Idempotency-Key": "k" * 10},
-        )
-        assert r.status_code == 403
-
-    async def test_purchase_without_any_key(self, anon):
-        r = await anon.post("/transactions", json={}, headers={"Idempotency-Key": "k" * 10})
-        assert r.status_code == 401
-
-    async def test_terminal_cannot_list_transactions(self, terminal):
-        assert (await terminal.get("/transactions")).status_code == 401
-
-    async def test_health_is_public(self, anon):
-        assert (await anon.get("/health")).status_code == 200  # more in test_health.py
-
-
 class TestErrorFormatAndDocs:
     async def test_unknown_path_uses_the_error_format(self, anon):
         r = await anon.get("/nope")
@@ -112,7 +65,7 @@ class TestErrorFormatAndDocs:
 
     async def test_openapi_documents_security_and_tags(self, anon):
         spec = (await anon.get("/openapi.json")).json()
-        assert set(spec["components"]["securitySchemes"]) == {"ManagerKey", "TerminalKey"}
+        assert set(spec["components"]["securitySchemes"]) == {"ManagerLogin", "TerminalClient"}
         tags = {t["name"] for t in spec["tags"]}
         assert {"Drivers", "Trucks", "Cards", "Transactions", "Notifications", "Reports"} <= tags
 

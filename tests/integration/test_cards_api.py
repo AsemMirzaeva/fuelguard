@@ -3,6 +3,7 @@ import asyncio
 import pytest
 
 from tests.factories import create_card, create_driver, unique
+from tests.tokens import MANAGER_USERNAME
 
 
 class TestCreate:
@@ -87,7 +88,7 @@ class TestStatus:
             assert r.status_code == 200 and r.json()["status"] == status
         history = (await manager.get(f"/cards/{c['id']}/history")).json()
         assert [h["new_status"] for h in history] == ["active", *path]
-        assert all(h["changed_by"] == "manager" for h in history)
+        assert all(h["changed_by"] == MANAGER_USERNAME for h in history)
 
     async def test_same_status_is_a_conflict_and_not_logged(self, manager):
         d = await create_driver(manager)

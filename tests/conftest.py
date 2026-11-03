@@ -56,3 +56,14 @@ def clean_db(_database):
     tables = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
     with sync_engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
+
+
+@pytest.fixture
+def jwks(monkeypatch):
+    """Replace the identity provider's key lookup with one that knows the test signing key."""
+    from app.core import security
+    from tests.tokens import FakeJwksClient
+
+    client = FakeJwksClient()
+    monkeypatch.setattr(security, "get_jwks_client", lambda: client)
+    return client

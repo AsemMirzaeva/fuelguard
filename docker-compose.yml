@@ -34,6 +34,39 @@ services:
       timeout: 3s
       retries: 10
 
+  # Identity provider (OAuth2 / OpenID Connect). Development mode with its built-in H2 database:
+  # fine for running locally, not for production. The realm (clients, roles, users) is imported
+  # from keycloak/fuelguard-realm.json; passwords and the terminal secret come from .env.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      # Tokens always carry this issuer, however Keycloak is reached (browser or container network).
+      KC_HOSTNAME: http://localhost:8180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+      TERMINAL_CLIENT_SECRET: ${TERMINAL_CLIENT_SECRET}
+      MANAGER_PASSWORD: ${MANAGER_PASSWORD}
+      AUDITOR_PASSWORD: ${AUDITOR_PASSWORD}
+    ports:
+      - "127.0.0.1:8180:8080"
+    volumes:
+      - ./keycloak/fuelguard-realm.json:/opt/keycloak/data/import/fuelguard-realm.json:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - |
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"status": "UP"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+
   api:
     <<: *app
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"

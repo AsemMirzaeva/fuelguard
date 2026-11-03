@@ -1,0 +1,96 @@
+{
+  "realm": "fuelguard",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "accessTokenLifespan": 300,
+  "roles": {
+    "realm": [
+      { "name": "manager", "description": "Full access: fleet, cards, review, reports" },
+      { "name": "auditor", "description": "Read-only access to everything a manager can read" },
+      { "name": "terminal", "description": "Card terminal: may only send purchases" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "fuelguard-terminal",
+      "name": "Fuel card terminal",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "${TERMINAL_CLIENT_SECRET}",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "webOrigins": ["http://localhost:8010"],
+      "protocolMappers": [
+        {
+          "name": "fuelguard-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "fuelguard-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "fuelguard-manager",
+      "name": "FuelGuard manager login (Swagger UI and dashboard)",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "http://localhost:8010/docs/oauth2-redirect",
+        "http://localhost:5180/*"
+      ],
+      "webOrigins": ["http://localhost:8010", "http://localhost:5180"],
+      "attributes": { "pkce.code.challenge.method": "S256" },
+      "protocolMappers": [
+        {
+          "name": "fuelguard-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "fuelguard-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "manager",
+      "enabled": true,
+      "email": "manager@fuelguard.local",
+      "emailVerified": true,
+      "firstName": "Fleet",
+      "lastName": "Manager",
+      "credentials": [{ "type": "password", "value": "${MANAGER_PASSWORD}", "temporary": false }],
+      "realmRoles": ["manager"]
+    },
+    {
+      "username": "auditor",
+      "enabled": true,
+      "email": "auditor@fuelguard.local",
+      "emailVerified": true,
+      "firstName": "Read",
+      "lastName": "Auditor",
+      "credentials": [{ "type": "password", "value": "${AUDITOR_PASSWORD}", "temporary": false }],
+      "realmRoles": ["auditor"]
+    },
+    {
+      "username": "service-account-fuelguard-terminal",
+      "enabled": true,
+      "serviceAccountClientId": "fuelguard-terminal",
+      "realmRoles": ["terminal"]
+    }
+  ]
+}

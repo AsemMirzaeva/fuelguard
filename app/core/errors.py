@@ -21,8 +21,9 @@ class ErrorResponse(BaseModel):
 
 
 AUTH_ERRORS = {
-    401: {"model": ErrorResponse, "description": "Missing API key"},
-    403: {"model": ErrorResponse, "description": "Invalid API key"},
+    401: {"model": ErrorResponse, "description": "Missing, expired or invalid access token"},
+    403: {"model": ErrorResponse, "description": "The token's role does not allow this action"},
+    503: {"model": ErrorResponse, "description": "Identity provider not available"},
 }
 NOT_FOUND = {404: {"model": ErrorResponse, "description": "Not found"}}
 CONFLICT = {409: {"model": ErrorResponse, "description": "Conflict with existing data"}}
@@ -56,9 +57,15 @@ class InvalidStateError(AppError):
     code = "invalid_state"
 
 
-def _response(status_code: int, code: str, message: str, details: Any = None):
+def _response(
+    status_code: int,
+    code: str,
+    message: str,
+    details: Any = None,
+    headers: dict[str, str] | None = None,
+):
     body = ErrorResponse(error=ErrorBody(code=code, message=message, details=details))
-    return JSONResponse(status_code=status_code, content=body.model_dump())
+    return JSONResponse(status_code=status_code, content=body.model_dump(), headers=headers)
 
 
 def register_error_handlers(app: FastAPI) -> None:
@@ -68,7 +75,8 @@ def register_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error_handler(_: Request, exc: StarletteHTTPException):
-        return _response(exc.status_code, "http_error", str(exc.detail))
+        # Keep headers such as WWW-Authenticate on 401 responses.
+        return _response(exc.status_code, "http_error", str(exc.detail), headers=exc.headers)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(_: Request, exc: RequestValidationError):

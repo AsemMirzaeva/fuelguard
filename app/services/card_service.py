@@ -7,10 +7,8 @@ from app.models.enums import CardStatus
 from app.schemas.cards import CardCreate, CardLimitsUpdate
 from app.services.common import commit_or_conflict, get_or_404
 
-MANAGER = "manager"
 
-
-async def create_card(db: AsyncSession, data: CardCreate) -> FuelCard:
+async def create_card(db: AsyncSession, data: CardCreate, changed_by: str) -> FuelCard:
     driver = await get_or_404(db, Driver, data.driver_id, "Driver")
     if not driver.is_active:
         raise InvalidStateError("Cannot issue a card to an inactive driver")
@@ -21,7 +19,7 @@ async def create_card(db: AsyncSession, data: CardCreate) -> FuelCard:
         await db.flush()
         db.add(
             CardStatusHistory(
-                card_id=card.id, old_status=None, new_status=CardStatus.ACTIVE, changed_by=MANAGER
+                card_id=card.id, old_status=None, new_status=CardStatus.ACTIVE, changed_by=changed_by
             )
         )
     await db.refresh(card)
@@ -47,7 +45,9 @@ async def get_card(db: AsyncSession, card_id: int) -> FuelCard:
     return await get_or_404(db, FuelCard, card_id, "Card")
 
 
-async def change_status(db: AsyncSession, card_id: int, new_status: CardStatus) -> FuelCard:
+async def change_status(
+    db: AsyncSession, card_id: int, new_status: CardStatus, changed_by: str
+) -> FuelCard:
     card = await get_or_404(db, FuelCard, card_id, "Card", lock=True)
     if card.status == new_status:
         raise ConflictError(f"Card is already {new_status.value}")
@@ -59,7 +59,7 @@ async def change_status(db: AsyncSession, card_id: int, new_status: CardStatus) 
     async with commit_or_conflict(db, "Could not change card status"):
         db.add(
             CardStatusHistory(
-                card_id=card.id, old_status=card.status, new_status=new_status, changed_by=MANAGER
+                card_id=card.id, old_status=card.status, new_status=new_status, changed_by=changed_by
             )
         )
         card.status = new_status
