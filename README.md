@@ -30,7 +30,7 @@ Celery + Redis · OAuth2 / OpenID Connect (Keycloak) · Docker Compose · Pytest
 | Simulate a fuel card purchase, validate against status and limits | `POST /transactions` ([flow](#how-a-purchase-works)) |
 | Flag limit, tank, unusually large and burst purchases; keep them for review | [Risk rules](#risk-rules), `/transactions/flagged`, `/transactions/{id}/review` |
 | At least two background workflows, with the reasoning | [Four workflows](#background-processing) on Celery + Redis |
-| Alembic migrations, Docker Compose, tests, logging, env config, OpenAPI | `alembic/`, `docker-compose.yml`, 545 tests, `/docs` |
+| Alembic migrations, Docker Compose, tests, logging, env config, OpenAPI | `alembic/`, `docker-compose.yml`, 572 tests, `/docs` |
 | *(not in the brief)* Who may call what | [OAuth2 tokens from Keycloak, three roles](#authentication-and-roles) |
 
 ## Quick start
@@ -439,7 +439,7 @@ required setting is missing.
 docker compose run --rm --build tests
 ```
 
-**545 tests, all against a real PostgreSQL** (no SQLite, no mocked database), 100 % line coverage of `app/`.
+**572 tests, all against a real PostgreSQL** (no SQLite, no mocked database), 100 % line coverage of `app/`.
 
 | Folder | Tests | What |
 |---|---|---|
